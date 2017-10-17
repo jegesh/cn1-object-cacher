@@ -1,2 +1,5 @@
-/Cn1Caching/nbproject/private/
-/Cn1Caching/build/
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/

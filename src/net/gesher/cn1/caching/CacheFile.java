@@ -40,16 +40,23 @@ public class CacheFile<T> {
     private final String PREFERENCES_LAST_CACHE_SYNC;
     private long lastSyncTime;
     private boolean hasSynced = false;
+    private Comparator comparator;
     
     /**
      * 
-     * @param filepath path to local cache file
+     * @param filepath absolute path to local cache file
      * @param serializer 
      * @throws IOException if unable to access file
      */
-    private CacheFile(String filepath, CacheSerializer<T> serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
+    public CacheFile(String filepath, CacheSerializer<T> serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
         this.localCacheFile = new File(filepath);
         this.serializer = serializer;
+        this.comparator = new Comparator() {
+                @Override
+                public int compare(Object o1, Object o2) {
+                    return o1.hashCode() - o2.hashCode();
+                }
+            };
         if(!localCacheFile.exists()){
             localCacheFile.createNewFile();
         }
@@ -58,20 +65,20 @@ public class CacheFile<T> {
         
         // load objects from file
         if(isUsingMemoryCache){
-            cacheMap = new TreeMap<>(getDefaultComparator());
+            cacheMap = new TreeMap<>(getComparator());
             for(T t: getDiskCache()){
                 cacheMap.put(serializer.getObjectId(t), t);
             }
         }
     }
     
-    public static void initialize(String filepath, CacheSerializer serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
-        instance = new CacheFile(filepath, serializer, isUsingMemoryCache);
-    }
+//    public static void initialize(String filepath, CacheSerializer serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
+//        instance = new CacheFile(filepath, serializer, isUsingMemoryCache);
+//    }
     
-    public static CacheFile getInstance(Class klass){
-        return instance;
-    }
+//    public static CacheFile getInstance(Class klass){
+//        return instance;
+//    }
     
     /**
      * Sets caching policies for invalidating the cache
@@ -276,22 +283,20 @@ public class CacheFile<T> {
         if(cacheMap != null)
             return (T[])cacheMap.values().toArray();
         T[] objArray = getDiskCache();
-        Arrays.sort(objArray, getDefaultComparator());
+        Arrays.sort(objArray, getComparator());
         return (T[])objArray;
     }
     
     /**
-     * Override this method to order the objects in the map
+     * Returns the comparator set or a default comparator if none was set
      * @return 
      */
-    protected Comparator getDefaultComparator(){
-        Comparator comp = new Comparator() {
-            @Override
-            public int compare(Object o1, Object o2) {
-                return o1.hashCode() - o2.hashCode();
-            }
-        };
-        return comp;
+    protected Comparator getComparator(){
+        return comparator;
+    }
+    
+    protected void setComparator(Comparator c){
+        this.comparator = c;
     }
     
     /**
