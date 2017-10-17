@@ -35,7 +35,7 @@ public class CacheFile<T> {
     private File localCacheFile;
     private CacheSerializer<T> serializer;
     private TreeMap<Object, T> cacheMap;
-    private static CacheFile instance;
+//    private static CacheFile instance;
     private Set<CachingPolicy> policies;
     private final String PREFERENCES_LAST_CACHE_SYNC;
     private long lastSyncTime;
@@ -48,15 +48,10 @@ public class CacheFile<T> {
      * @param serializer 
      * @throws IOException if unable to access file
      */
-    public CacheFile(String filepath, CacheSerializer<T> serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
+    public CacheFile(String filepath, CacheSerializer<T> serializer, boolean isUsingMemoryCache, Comparator comparator) throws IOException, JSONException{
         this.localCacheFile = new File(filepath);
         this.serializer = serializer;
-        this.comparator = new Comparator() {
-                @Override
-                public int compare(Object o1, Object o2) {
-                    return o1.hashCode() - o2.hashCode();
-                }
-            };
+        this.comparator = comparator;
         if(!localCacheFile.exists()){
             localCacheFile.createNewFile();
         }
@@ -65,11 +60,17 @@ public class CacheFile<T> {
         
         // load objects from file
         if(isUsingMemoryCache){
-            cacheMap = new TreeMap<>(getComparator());
+            if(comparator != null)
+                cacheMap = new TreeMap<>(comparator);
+            else cacheMap = new TreeMap<>();
             for(T t: getDiskCache()){
                 cacheMap.put(serializer.getObjectId(t), t);
             }
         }
+    }
+    
+    public CacheFile(String filepath, CacheSerializer<T> serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
+        this(filepath, serializer, isUsingMemoryCache, null);
     }
     
 //    public static void initialize(String filepath, CacheSerializer serializer, boolean isUsingMemoryCache) throws IOException, JSONException{
@@ -275,28 +276,16 @@ public class CacheFile<T> {
         return rangeArray;
     }
     
-//    public Object[] getAll() throws IOException, JSONException{
-//        return getSortedValues();
-//    }
+    public Object[] getAll() throws IOException, JSONException{
+        return getCachedObjectsSorted();
+    }
     
     private T[] getCachedObjectsSorted() throws IOException, JSONException{
         if(cacheMap != null)
             return (T[])cacheMap.values().toArray();
         T[] objArray = getDiskCache();
-        Arrays.sort(objArray, getComparator());
+        Arrays.sort(objArray, comparator);
         return (T[])objArray;
-    }
-    
-    /**
-     * Returns the comparator set or a default comparator if none was set
-     * @return 
-     */
-    protected Comparator getComparator(){
-        return comparator;
-    }
-    
-    protected void setComparator(Comparator c){
-        this.comparator = c;
     }
     
     /**
