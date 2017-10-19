@@ -182,3 +182,15 @@ Typically, the app will want to save the object to the external source as well:
 ### Cache Validation
 
 ### The `CacheErrorNotifier` Interface
+Since the cache is held in the file as a JSON array, the entire file is actually rewritten every time the cache is persisted to the filesystem.
+This can be a rather lengthy operation, therefore it is executed on a worker thread, not on the EDT (see [here](https://github.com/codenameone/CodenameOne/wiki/The-EDT---Event-Dispatch-Thread) for more details). By passing an implementation of `CacheErrorNotifier`
+when performing an operation that writes to the file, the exception can be retrieved from the worker thread, and can be reacted to appropriately.
+
+The `CacheErrorNotifier` will only report an error if 1. the operation writes to the filesystem and 2. the operation threw an error.
+The operations that write to the filesystem vary, depending on whether or not memory caching is being used:
++ `syncAll()` always writes to the filesystem
++ `addToCache()`, `update()`, and `remove()` write to the filesystem if memory caching is not being used
++ retrieval operations never write to file, therefore they do not accept a notifier object in the method arguments
+
+Similarly, passing `null` for the notifier argument is the way to indicate that the app is not interested in being notified of potential exceptions.
+ 
