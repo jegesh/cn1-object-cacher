@@ -288,6 +288,10 @@ public class CacheFile<T> {
         return (T[])objArray;
     }
     
+    public boolean isCached(T object) throws IOException, JSONException{
+        return get(serializer.getObjectId(object)) != null;
+    }
+    
     /**
      * 
      * @param object

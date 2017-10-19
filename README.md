@@ -76,6 +76,12 @@ public class CarSerializer implements CacheSerializer<Car>{
 ```
 __Note:__ The `getObjectId` method must return a unique value for each object in the given cache.
 
+
+>__ParseObject Serialization__<br/>
+An example of a serializer for `ParseObject` (from the [parse4cn1 library](https://github.com/jegesh/parse4cn1)) can be found in
+[this gist](https://gist.github.com/jegesh/cdade7f8c9ffa525bac4f6bd3eae6b42). It is important to note that 
+the implementation in the gist assumes that all `ParseObject` references are fetched at the time of serialization.
+
 A similar serializer can be easily implemented for the `User` class. Once we've done that,
 we can instantiate a `CacheFile` object and specify which class's cache it will manage by setting the typed parameter.
 
@@ -102,7 +108,7 @@ the data needs to be persisted to the file via the [`CacheFile.syncFromMemCacheA
 before exiting the app, or all changes will be lost.
 
 It is best practice to use only a single instance of `CacheFile` per type of object being stored.  One simple way to achieve this is by
-instantiated all `CacheFile`s in the cn1 application class's `start()` method, and hold a static reference to the `CacheFile`:
+instantiating all `CacheFile`s in the cn1 application class's `start()` method, and hold a static reference to the `CacheFile`:
 
 ```Java
 public class MyApplication{
@@ -122,11 +128,57 @@ Car[] cars = carCache.getAll(); // retrieve all cars in the cache
 ```
 
 ### Syncing From External Data Source
+The method [`CacheFile.syncAll()`](https://github.com/jegesh/cn1-object-cacher/blob/4d06f7b4c47d09b4659734f54916ba8083703da5/src/net/gesher/cn1/caching/CacheFile.java#L120) is
+used to populate the cache with data, either initially, or at any point when the cached data needs to be refreshed from the server or any other source.  All existing data in the cache is replaced completely by
+the data array received in the method argument.
 
-### Retrieving Lists of Objects
+### Retrieving Objects
+`CacheFile` exposes a few different methods for retrieving objects:
++ `CacheFile.getAll()` retrieves all the objects in the cache
++ `CacheFile.getRange(int first, int last)` retrieves all the objects in the given range, by 0-based index (including the last index). The list is ordered according to the comparator that was passed
+in the constructor (see below), or is unordered, if no comparator was set.  This method can be used in conjunction with cn1's `InfiniteContainer` to easily create infinitely scrolling cache-based lists of objects.
++ `CacheFile.get(Object id)` retrieves a single object, using the id as calculated by the serializer.
 
 #### List Sorting
-
+By passing a `Comparator` implementation as a fourth argument of the `CacheFile`, you can affect how the objects will be sorted (applies to the `getAll()` and `getRange()` methods).
+You can sort a single cache of objects more than one way by creating multiple instances of `CacheFile` all based on the same physical file, using different comparators.  For instance,
+if the car swapping app wanted to allow fast sorting by price, year, or model, it would look something like this:
+```Java
+String carCacheFilepath = FileSystemStorage.getInstance().getAppHomePath() + "cache/car.json";
+CacheSerializer carSerializer = new CarSerializer();
+CacheFile carByPrice = new CacheFile(carCacheFilepath, carSerializer, true, new CarByPriceComparator());
+CacheFile carByYear = new CacheFile(carCacheFilepath, carSerializer, true, new CarByYearComparator());
+CacheFile carByModel = new CacheFile(carCacheFilepath, carSerializer, true, new CarByModelComparator());
+```
+This way, the cars are all presorted simultaneously by price, year, and model (in a case like this it might be wiser not to use memory caching - depending on how large the dataset is, it could cause a strain on system memory).
 ### Updating Objects
+Updating the cache can be done one object at a time, using the following methods:
++ `CacheFile.addToCache(Object o, CacheErrorNotifier notifier)`
++ `CacheFile.update(Object o, CacheErrorNotifier notifier)`
++ `CacheFile.remove(Object o, CacheErrorNotifier notifier)`
 
+Typically, the app will want to save the object to the external source as well:
+```Java
+	public class Car{
+		private CacheFile carCache;
+		...
+		
+		public boolean save(){
+			try{
+				saveToServer();
+				if(!carCache.isCached()){
+					carCache.addToCache(this);
+				} else{
+					carCache.update(this);
+				}
+				return true;
+			}catch(Exception ex){
+				Log.e(ex);
+				return false;
+			}
+		}
+	}
+```
 ### Cache Validation
+
+### The `CacheErrorNotifier` Interface
