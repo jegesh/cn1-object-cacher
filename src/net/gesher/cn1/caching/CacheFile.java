@@ -128,10 +128,11 @@ public class CacheFile<T> {
                 if(cacheMap != null)
                     cacheMap.put(serializer.getObjectId(data.get(i)), data.get(i));
             }
-        }
+            // write to file
+            syncFromMemCacheAsync(notifier);
+        }else
+            syncDiskCache(data, notifier);
         
-        // write to file
-        syncFromMemCacheAsync(data, notifier);
         Preferences.set(PREFERENCES_LAST_CACHE_SYNC, new Date().getTime());
         hasSynced = true;
     }
@@ -189,32 +190,36 @@ public class CacheFile<T> {
      * @param updatedData
      * @param notifier 
      */
-    public void syncFromMemCacheAsync(List<T> updatedData, CacheErrorNotifier notifier){
+    public void syncFromMemCacheAsync(CacheErrorNotifier notifier){
         // update file
         Display.getInstance().scheduleBackgroundTask(new Runnable() {
             @Override
             public void run() {
-                try {
+                syncDiskCache(cacheMap.values(), notifier);
+            }
+        });
+    }
+    
+    private void syncDiskCache(Collection<T> data, CacheErrorNotifier notifier){
+        try {
                     JSONArray dataArray = new JSONArray();
-                    for(T t: updatedData)
+                    for(T t: data)
                         dataArray.put(serializer.serialize(t));
 
                     if (!localCacheFile.exists()) {
                         localCacheFile.createNewFile();
                     }
-                    try (OutputStream outputStream = FileSystemStorage.getInstance().openOutputStream(localCacheFile.getAbsolutePath())) {
+                    OutputStream outputStream = FileSystemStorage.getInstance().openOutputStream(localCacheFile.getAbsolutePath());
                         outputStream.write(dataArray.toString().getBytes());
                         outputStream.flush();
-                    }
-                    Log.p(this.getClass().getSimpleName() + ": Synched " + dataArray.length() + " entries to cache file " + localCacheFile.getName(), Log.INFO);
+                    
+                    Log.p(this.getClass().getSimpleName() + ": Synced " + dataArray.length() + " entries to cache file " + localCacheFile.getName(), Log.INFO);
                 } catch (IOException ex) {
                     ex.printStackTrace();
                     if (notifier != null) {
                         notifier.notify(ex);
                     }
                 }
-            }
-        });
     }
 
     public T get(Object id) throws IOException, JSONException {
