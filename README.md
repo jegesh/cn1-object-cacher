@@ -166,7 +166,7 @@ Typically, the app will want to save the object to the external source as well:
 		public boolean save(){
 			try{
 				saveToServer();
-				if(!carCache.isCached()){
+				if(!carCache.isCached(this)){
 					carCache.addToCache(this);
 				} else{
 					carCache.update(this);
