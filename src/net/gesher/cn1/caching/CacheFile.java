@@ -19,8 +19,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -34,7 +37,7 @@ import java.util.TreeMap;
 public class CacheFile<T> {
     private File localCacheFile;
     private CacheSerializer<T> serializer;
-    private TreeMap<Object, T> cacheMap;
+    private Map<Object, T> cacheMap;
 //    private static CacheFile instance;
     private Set<CachingPolicy> policies;
     private final String PREFERENCES_LAST_CACHE_SYNC;
@@ -55,13 +58,13 @@ public class CacheFile<T> {
         if(!localCacheFile.exists()){
             localCacheFile.createNewFile();
         }
-        PREFERENCES_LAST_CACHE_SYNC = filepath + "_cache_last_sync";
-        lastSyncTime = Preferences.get(PREFERENCES_LAST_CACHE_SYNC, 0);
+        PREFERENCES_LAST_CACHE_SYNC = this.localCacheFile.getName() + "_cache_last_sync";
+        lastSyncTime = Preferences.get(PREFERENCES_LAST_CACHE_SYNC, 0L);
         
         // load objects from file
         if(isUsingMemoryCache){
             if(comparator != null)
-                cacheMap = new TreeMap<>(comparator);
+                cacheMap = new ValueTreeMap<>(comparator);
             else cacheMap = new TreeMap<>();
             for(T t: getDiskCache()){
                 cacheMap.put(serializer.getObjectId(t), t);
@@ -117,13 +120,13 @@ public class CacheFile<T> {
      * @param notifier used to receive exceptions from the syncing process
      * @throws IOException 
      */
-    public void syncAll(T[] data, CacheErrorNotifier notifier) throws IOException{
+    public void syncAll(List<T> data, CacheErrorNotifier notifier) throws IOException{
         if(cacheMap != null){
             cacheMap.clear();
         
-            for(int i = 0;i < data.length;i++){
+            for(int i = 0;i < data.size();i++){
                 if(cacheMap != null)
-                    cacheMap.put(serializer.getObjectId(data[i]), data[i]);
+                    cacheMap.put(serializer.getObjectId(data.get(i)), data.get(i));
             }
         }
         
@@ -136,7 +139,7 @@ public class CacheFile<T> {
     /**
      * 
      */
-    private T[] getDiskCache() throws IOException, JSONException{
+    private ArrayList<T> getDiskCache() throws IOException, JSONException{
         ArrayList<T> cacheArray = new ArrayList<>();
         
         InputStream fileStream = FileSystemStorage.getInstance().openInputStream(localCacheFile.getAbsolutePath());
@@ -152,7 +155,7 @@ public class CacheFile<T> {
         }else{
             Log.p(this.getClass().getSimpleName() + ": JSON cache empty", Log.INFO);
         }
-        return (T[])cacheArray.toArray();
+        return cacheArray;
     }
     
     /**
@@ -168,12 +171,12 @@ public class CacheFile<T> {
             return;
         }
 
-        Object[] all = getDiskCache();
-        for(int i = 0;i < all.length;i++){
-            Object o = all[i];
+        ArrayList<T> all = getDiskCache();
+        for(int i = 0;i < all.size();i++){
+            Object o = all.get(i);
             if(serializer.getObjectId((T)o).equals(serializer.getObjectId(obj))){
-                all[i] = obj;
-                syncAll((T[])all, notifier);
+                all.add(i, obj);
+                syncAll(all, notifier);
                 return;
             }
         }
@@ -186,7 +189,7 @@ public class CacheFile<T> {
      * @param updatedData
      * @param notifier 
      */
-    public void syncFromMemCacheAsync(T[] updatedData, CacheErrorNotifier notifier){
+    public void syncFromMemCacheAsync(List<T> updatedData, CacheErrorNotifier notifier){
         // update file
         Display.getInstance().scheduleBackgroundTask(new Runnable() {
             @Override
@@ -239,13 +242,12 @@ public class CacheFile<T> {
                 return true;
             }else return false;
         }
-        Object[] objs = getDiskCache();
-        for(int i = 0;i < objs.length;i++){
-            Object o = objs[i];
+        ArrayList<T> objs = getDiskCache();
+        for(int i = 0;i < objs.size();i++){
+            Object o = objs.get(i);
             if(serializer.getObjectId((T)o).equals(serializer.getObjectId(obj))){
-                Object[] newObjs = new Object[objs.length -1];
-                Util.removeObjectAtOffset(objs, newObjs, i);
-                syncAll((T[])newObjs, notifier);
+                objs.remove(i);
+                syncAll(objs, notifier);
                 return true;
             }
         }
@@ -266,26 +268,38 @@ public class CacheFile<T> {
      * @param finish 0-index position of last object to return
      * @return 
      */
-    public T[] getRange(int start, int finish) throws IOException, JSONException{
+    public List<T> getRange(int start, int finish) throws IOException, JSONException{
         if(cacheMap != null){
-            return copyRange((T[])cacheMap.values().toArray(), start, finish);
+            return (new ArrayList<>(cacheMap.values()).subList(start, finish+1));
         }
-        T[] rangeArray = (T[])new Object[finish-start];
-        for(int i=0;i < finish-start;i++)
-            rangeArray[i] = getCachedObjectsSorted()[i + start];
-        return rangeArray;
+            
+        return getCachedObjectsSorted().subList(start, finish + 1);
     }
     
-    public Object[] getAll() throws IOException, JSONException{
+    public List<T> getAll() throws IOException, JSONException{
         return getCachedObjectsSorted();
     }
     
-    private T[] getCachedObjectsSorted() throws IOException, JSONException{
-        if(cacheMap != null)
-            return (T[])cacheMap.values().toArray();
-        T[] objArray = getDiskCache();
+    public int size() throws IOException, JSONException{
+        if(cacheMap == null)
+            return getDiskCache().size();
+        return cacheMap.size();
+    }
+    
+    private ArrayList<T> toArrayList(Object[] array){
+        ArrayList<T> aList = new ArrayList<>(array.length);
+        for(Object o: array)
+            aList.add((T) o);
+        return aList;
+    }
+    
+    private ArrayList<T> getCachedObjectsSorted() throws IOException, JSONException{
+        if(cacheMap != null){
+            return new ArrayList<>(cacheMap.values());
+        }
+        Object[] objArray = getDiskCache().toArray();
         Arrays.sort(objArray, comparator);
-        return (T[])objArray;
+        return toArrayList(objArray);
     }
     
     public boolean isCached(T object) throws IOException, JSONException{
@@ -305,12 +319,9 @@ public class CacheFile<T> {
             return;
         }
         
-        T[] original = getDiskCache();
-        Object[] appendedArray = new Object[original.length + 1];
-        for(int i = 0;i < original.length;i++)
-            appendedArray[i] = original[i];
-        appendedArray[appendedArray.length - 1] = object;
-        syncAll((T[])appendedArray, notifier);
+        ArrayList<T> original = getDiskCache();
+        original.add(object);
+        syncAll(original, notifier);
     }
     
     /**
