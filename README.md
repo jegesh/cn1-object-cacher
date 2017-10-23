@@ -180,6 +180,33 @@ Typically, the app will want to save the object to the external source as well:
 	}
 ```
 ### Cache Validation
+While at some point the cache will need to be refreshed with current data from the external data source, it's not a trivial task
+to keep track of data freshness.  Therefore the app can set a data freshness policy for each `CacheFile` instance that will then allow it to query
+the cache about the state of the data.  After instatiating an instance of `CacheFile`, the `setPolicy()` method can be used to enforce a policy of
+data freshness, which is determined via the `isCacheValid()` method.  Currently only three policies are available, but other policies can be added by
+extending the `CacheFile` class and overriding the `isCacheValid()` method.  The various policies are cumulative, i.e. if the cache in invalid according
+to any one of the criteria, the method will return `false`.  For instance, if the app needs to ensure the data will be refreshed when the app is opened,
+and at least once an hour while the app is open, the following code would be expected:
+```Java
+
+// in application class
+public void start(){
+	carCache = new CacheFile("cars.json", new CarSerializer, true);
+	carCache.setPolicy(new HashSet(new CachingPolicy[]{CachingPolicy.SYNC_ON_APP_OPEN, SYNC_HOURLY}));
+	...
+}
+
+// in DAL class
+public List<Car> getAllCars(){
+	if(carCache.isCacheValid())
+		return carCache.getAll();
+	// if cache is invalid	
+	List<Car> cars = getCarsFromServer();
+	carCache.syncAll(cars);
+	return cars;
+}
+```
+Likewise, if the app only needs the data to be refreshed once a day, then only the `SYNC_DAILY` restraint would be applied.
 
 ### The `CacheErrorNotifier` Interface
 Since the cache is held in the file as a JSON array, the entire file is actually rewritten every time the cache is persisted to the filesystem.
