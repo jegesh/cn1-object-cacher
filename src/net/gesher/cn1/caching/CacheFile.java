@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package net.gesher.cn1.caching;
 
 import ca.weblite.codename1.json.JSONArray;
@@ -13,6 +8,7 @@ import com.codename1.io.Log;
 import com.codename1.io.Preferences;
 import com.codename1.io.Util;
 import com.codename1.ui.Display;
+import com.codename1.util.Base64;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -58,7 +54,7 @@ public class CacheFile<T> {
         if(!localCacheFile.exists()){
             localCacheFile.createNewFile();
         }
-        PREFERENCES_LAST_CACHE_SYNC = this.localCacheFile.getName() + "_cache_last_sync";
+        PREFERENCES_LAST_CACHE_SYNC = Base64.encode(filepath.getBytes()) + "_cache_last_sync";
         lastSyncTime = Preferences.get(PREFERENCES_LAST_CACHE_SYNC, 0L);
         
         // load objects from file

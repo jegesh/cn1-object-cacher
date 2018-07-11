@@ -15,7 +15,7 @@ import java.util.TreeSet;
  * @param <K>
  * @param <V>
  */
-public class ValueTreeMap<K,V> implements Iterable<V>, Map<K,V> {
+ class ValueTreeMap<K,V> implements Iterable<V>, Map<K,V> {
     private final TreeSet<V> tree;
     private final HashMap<K, V> map = new HashMap<>();
 
